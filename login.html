@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>تسجيل الدخول — سجل الموظفين</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; }
+    .auth-wrap { width:100%; max-width:420px; padding:20px; animation:fadeUp .5s ease; }
+    .logo-area { text-align:center; margin-bottom:32px; }
+    .logo-area svg { width:80px; height:80px; filter:drop-shadow(0 4px 16px rgba(201,150,58,.4)); }
+    .logo-area h1 { font-size:1.7rem; font-weight:900; background:linear-gradient(135deg,#e8b455,#c9963a); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-top:10px; }
+    .logo-area p { color:var(--text-muted); font-size:.9rem; }
+    .tabs { display:flex; background:var(--bg); border-radius:var(--radius-sm); padding:4px; margin-bottom:24px; }
+    .tab { flex:1; padding:10px; text-align:center; border-radius:6px; cursor:pointer; font-weight:700; font-size:.9rem; color:var(--text-muted); transition:all .2s; border:none; background:transparent; font-family:'Cairo',sans-serif; }
+    .tab.active { background:var(--bg-card); color:var(--accent-light); box-shadow:0 2px 8px rgba(0,0,0,.3); }
+    .pass-wrap { position:relative; }
+    .pass-wrap input { padding-left:44px !important; }
+    .pass-toggle { position:absolute; left:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:1.1rem; color:var(--text-muted); }
+    .remember { display:flex; align-items:center; gap:8px; margin-bottom:20px; font-size:.9rem; color:var(--text-muted); cursor:pointer; }
+    .remember input { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="logo-area">
+      <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="60" cy="60" r="56" fill="#1a3a5c" stroke="#c9963a" stroke-width="2"/>
+        <circle cx="60" cy="42" r="16" fill="#c9963a"/>
+        <path d="M28 90 Q28 68 60 68 Q92 68 92 90" fill="#c9963a" opacity=".9"/>
+      </svg>
+      <h1>سجل الموظفين</h1>
+      <p>نظام إدارة الموظفين والرواتب</p>
+    </div>
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" id="tab-login" onclick="switchTab('login')">تسجيل الدخول</button>
+        <button class="tab" id="tab-register" onclick="switchTab('register')">حساب جديد</button>
+      </div>
+      <div id="alert-box"></div>
+      <!-- LOGIN -->
+      <div id="login-form">
+        <div class="form-group"><label>📧 البريد الإلكتروني</label><input type="email" id="l-email" placeholder="example@email.com"/></div>
+        <div class="form-group">
+          <label>🔒 كلمة المرور</label>
+          <div class="pass-wrap"><input type="password" id="l-pass" placeholder="••••••••"/><button class="pass-toggle" onclick="togglePass('l-pass',this)">👁️</button></div>
+        </div>
+        <label class="remember"><input type="checkbox" id="remember" checked/>تذكرني على هذا الجهاز</label>
+        <button class="btn btn-primary btn-full" id="login-btn" onclick="doLogin()">🚀 دخول</button>
+      </div>
+      <!-- REGISTER -->
+      <div id="register-form" class="hidden">
+        <div class="form-group"><label>👤 الاسم الكامل</label><input type="text" id="r-name" placeholder="اسمك الكامل"/></div>
+        <div class="form-group"><label>📧 البريد الإلكتروني</label><input type="email" id="r-email" placeholder="example@email.com"/></div>
+        <div class="form-group">
+          <label>🔒 كلمة المرور</label>
+          <div class="pass-wrap"><input type="password" id="r-pass" placeholder="6 أحرف على الأقل"/><button class="pass-toggle" onclick="togglePass('r-pass',this)">👁️</button></div>
+        </div>
+        <button class="btn btn-primary btn-full" id="register-btn" onclick="doRegister()">✅ إنشاء الحساب</button>
+      </div>
+    </div>
+  </div>
+  <script src="api.js"></script>
+  <script>
+    if (localStorage.getItem('auth_token')) window.location.href = 'index.html';
+
+    function switchTab(tab) {
+      document.getElementById('login-form').classList.toggle('hidden', tab !== 'login');
+      document.getElementById('register-form').classList.toggle('hidden', tab !== 'register');
+      document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+      document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+      document.getElementById('alert-box').innerHTML = '';
+    }
+
+    function togglePass(id, btn) {
+      const inp = document.getElementById(id);
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      btn.textContent = inp.type === 'password' ? '👁️' : '🙈';
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('l-email').value.trim();
+      const pass  = document.getElementById('l-pass').value;
+      if (!email || !pass) { showAlert('⚠️ أدخل البريد وكلمة المرور', 'error'); return; }
+      const btn = document.getElementById('login-btn'); loading(btn, true);
+      try {
+        const res = await apiPost({ action: 'login', email, password: pass });
+        if (res.success) {
+          localStorage.setItem('auth_token', res.data.token);
+          localStorage.setItem('auth_name',  res.data.name);
+          localStorage.setItem('auth_email', res.data.email);
+          localStorage.setItem('auth_uid',   String(res.data.id));
+          window.location.href = 'index.html';
+        } else { showAlert('❌ ' + res.message, 'error'); }
+      } catch(e) { showAlert('❌ تعذر الاتصال بالخادم', 'error'); }
+      loading(btn, false);
+    }
+
+    async function doRegister() {
+      const name  = document.getElementById('r-name').value.trim();
+      const email = document.getElementById('r-email').value.trim();
+      const pass  = document.getElementById('r-pass').value;
+      if (!name || !email || !pass) { showAlert('⚠️ يرجى ملء جميع الحقول', 'error'); return; }
+      if (pass.length < 6) { showAlert('⚠️ كلمة المرور 6 أحرف على الأقل', 'error'); return; }
+      const btn = document.getElementById('register-btn'); loading(btn, true);
+      try {
+        const res = await apiPost({ action: 'register', name, email, password: pass });
+        if (res.success) {
+          localStorage.setItem('auth_token', res.data.token);
+          localStorage.setItem('auth_name',  res.data.name);
+          localStorage.setItem('auth_email', res.data.email);
+          localStorage.setItem('auth_uid',   String(res.data.id));
+          window.location.href = 'index.html';
+        } else { showAlert('❌ ' + res.message, 'error'); }
+      } catch(e) { showAlert('❌ تعذر الاتصال بالخادم', 'error'); }
+      loading(btn, false);
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const isLogin = !document.getElementById('login-form').classList.contains('hidden');
+      if (isLogin) doLogin(); else doRegister();
+    });
+  </script>
+</body>
+</html>

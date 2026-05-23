@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>إضافة موظف</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <nav>
+    <a href="index.html" class="nav-brand"><div class="logo-icon">👥</div>سجل الموظفين</a>
+    <a href="index.html" class="nav-home">🏠 الرئيسية</a>
+  </nav>
+  <div class="container">
+    <div class="page-title fade-up">
+      <span class="icon">➕</span>
+      <h1>إضافة موظف جديد</h1>
+      <p>أدخل بيانات الموظف</p>
+    </div>
+    <div class="card fade-up" style="animation-delay:.1s">
+      <div id="alert-box"></div>
+      <div class="form-group">
+        <label>👤 اسم الموظف</label>
+        <input type="text" id="name" placeholder="الاسم الكامل"/>
+      </div>
+      <div class="form-group">
+        <label>📱 رقم الجوال</label>
+        <input type="tel" id="phone" placeholder="05xxxxxxxx"/>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>📅 تاريخ التعيين</label>
+          <input type="date" id="hire_date"/>
+        </div>
+        <div class="form-group">
+          <label>💰 سعر الساعة (ريال)</label>
+          <input type="number" id="hourly_rate" placeholder="0.00" min="0" step="0.01"/>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full" id="btn" onclick="addEmployee()">✅ حفظ الموظف</button>
+    </div>
+  </div>
+  <script src="api.js"></script>
+  <script>
+    requireAuth();
+    async function addEmployee() {
+      const name        = document.getElementById('name').value.trim();
+      const phone       = document.getElementById('phone').value.trim();
+      const hire_date   = document.getElementById('hire_date').value;
+      const hourly_rate = parseFloat(document.getElementById('hourly_rate').value);
+      const btn = document.getElementById('btn');
+      if (!name || !phone || !hire_date || isNaN(hourly_rate)) {
+        showAlert('⚠️ يرجى ملء جميع الحقول', 'error'); return;
+      }
+      loading(btn, true);
+      try {
+        const existing = await apiPost({ action: 'getEmployees' });
+        const employees = existing.data || [];
+        const id = employees.length > 0 ? Math.max(...employees.map(e => Number(e.id))) + 1 : 1;
+        const res = await apiPost({ action: 'addEmployee', id, name, phone, hire_date, hourly_rate });
+        if (res.success) {
+          showAlert(`✅ تم إضافة "${name}" برقم #${id}`, 'success');
+          ['name','phone','hire_date','hourly_rate'].forEach(f => document.getElementById(f).value = '');
+        } else { showAlert('❌ ' + res.message, 'error'); }
+      } catch(e) { showAlert('❌ تعذر الاتصال', 'error'); }
+      loading(btn, false);
+    }
+  </script>
+</body>
+</html>

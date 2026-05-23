@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>تسجيل الدخول</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .time-display{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;font-size:1.4rem;font-weight:700;color:var(--success);text-align:center;letter-spacing:1px;margin-bottom:4px}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="index.html" class="nav-brand"><div class="logo-icon">👥</div>سجل الموظفين</a>
+    <a href="index.html" class="nav-home">🏠 الرئيسية</a>
+  </nav>
+  <div class="container">
+    <div class="page-title fade-up"><span class="icon">🟢</span><h1>تسجيل وقت الدخول</h1><p>ابحث عن الموظف ثم سجل وقت الدخول</p></div>
+    <div class="card fade-up" style="animation-delay:.1s">
+      <div id="alert-box"></div>
+      <div class="form-group"><label>🔍 اسم الموظف أو رقمه</label><input type="text" id="search" placeholder="أدخل الاسم أو الرقم..."/></div>
+      <button class="btn btn-secondary btn-full" id="search-btn" onclick="searchEmployee()" style="margin-bottom:20px">🔍 بحث</button>
+      <div id="emp-section" class="hidden">
+        <div class="emp-result">
+          <div class="emp-avatar" id="emp-avatar"></div>
+          <div class="emp-info"><h3 id="emp-name"></h3><p id="emp-detail"></p></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label>📅 تاريخ الدخول</label><input type="date" id="checkin-date"/></div>
+          <div class="form-group">
+            <label>🕐 وقت الدخول</label>
+            <div class="time-display" id="time-show">--:--</div>
+            <input type="time" id="checkin-time"/>
+          </div>
+        </div>
+        <button class="btn btn-success btn-full" id="save-btn" onclick="saveCheckin()">✅ تسجيل الدخول</button>
+      </div>
+    </div>
+  </div>
+  <script src="api.js"></script>
+  <script>
+    requireAuth();
+    let selectedEmp = null;
+    async function searchEmployee() {
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      if (!q) { showAlert('⚠️ أدخل اسم أو رقم', 'error'); return; }
+      const btn = document.getElementById('search-btn'); loading(btn, true);
+      try {
+        const res = await apiPost({ action: 'getEmployees' });
+        const emp = (res.data||[]).find(e => e.name.toLowerCase().includes(q) || String(e.id)===q);
+        if (!emp) { showAlert('❌ لم يتم العثور على الموظف', 'error'); loading(btn,false); return; }
+        selectedEmp = emp;
+        document.getElementById('emp-avatar').textContent = emp.name.charAt(0);
+        document.getElementById('emp-name').textContent = emp.name;
+        document.getElementById('emp-detail').textContent = `رقم: #${emp.id} | جوال: ${emp.phone}`;
+        const d = new Date(), date = d.toISOString().split('T')[0], time = d.toTimeString().slice(0,5);
+        document.getElementById('checkin-date').value = date;
+        document.getElementById('checkin-time').value = time;
+        document.getElementById('time-show').textContent = time;
+        document.getElementById('checkin-time').oninput = function(){ document.getElementById('time-show').textContent = this.value||'--:--'; };
+        document.getElementById('emp-section').classList.remove('hidden');
+      } catch(e) { showAlert('❌ تعذر الاتصال', 'error'); }
+      loading(btn, false);
+    }
+    function saveCheckin() {
+      const date = document.getElementById('checkin-date').value;
+      const time = document.getElementById('checkin-time').value;
+      if (!date||!time) { showAlert('⚠️ أدخل التاريخ والوقت', 'error'); return; }
+      const existing = Attendance.forEmployee(selectedEmp.id).find(r => r.date===date && r.checkin);
+      if (existing) { showAlert('⚠️ تم تسجيل الدخول لهذا اليوم مسبقاً', 'error'); return; }
+      // حفظ محلي + سحابة
+      Attendance.add({ emp_id: selectedEmp.id, emp_name: selectedEmp.name, date, checkin: time, checkout: '' });
+      showAlert(`✅ تم تسجيل دخول "${selectedEmp.name}" الساعة ${time}`, 'success');
+      document.getElementById('emp-section').classList.add('hidden');
+      document.getElementById('search').value = '';
+      selectedEmp = null;
+    }
+  </script>
+</body>
+</html>

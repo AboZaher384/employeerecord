@@ -1,0 +1,74 @@
+<!-- hours.html -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ساعات الدوام</title><link rel="stylesheet" href="style.css"/>
+  <style>
+    .hours-result{background:var(--bg-card2);border:1px solid var(--accent);border-radius:var(--radius);padding:24px;text-align:center;margin-top:20px}
+    .hours-result .big-num{font-size:3rem;font-weight:900;color:var(--accent-light);line-height:1}
+    .hours-result .sub{color:var(--text-muted);font-size:.9rem;margin-top:6px}
+    .rec-item{background:var(--bg-card2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:.9rem}
+    .rec-date{color:var(--text-muted)}.rec-hours{color:var(--success);font-weight:700}
+  </style>
+</head>
+<body>
+  <nav><a href="index.html" class="nav-brand"><div class="logo-icon">👥</div>سجل الموظفين</a><a href="index.html" class="nav-home">🏠 الرئيسية</a></nav>
+  <div class="container">
+    <div class="page-title fade-up"><span class="icon">⏱️</span><h1>ساعات الدوام</h1><p>احسب إجمالي ساعات الموظف في فترة محددة</p></div>
+    <div class="card fade-up" style="animation-delay:.1s">
+      <div id="alert-box"></div>
+      <div class="form-group"><label>🔍 اسم الموظف أو رقمه</label><input type="text" id="search" placeholder="أدخل الاسم أو الرقم..."/></div>
+      <button class="btn btn-secondary btn-full" id="search-btn" onclick="searchEmployee()" style="margin-bottom:20px">🔍 بحث</button>
+      <div id="emp-section" class="hidden">
+        <div class="emp-result" style="margin-bottom:20px"><div class="emp-avatar" id="emp-avatar"></div><div class="emp-info"><h3 id="emp-name"></h3><p id="emp-detail"></p></div></div>
+        <div class="grid-2">
+          <div class="form-group"><label>📅 من تاريخ</label><input type="date" id="date-from"/></div>
+          <div class="form-group"><label>📅 إلى تاريخ</label><input type="date" id="date-to"/></div>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="calcHours()">🔢 احسب الساعات</button>
+        <div id="result-section" class="hidden">
+          <div class="hours-result"><div class="big-num" id="total-hours">0</div><div class="sub">إجمالي الساعات</div></div>
+          <div id="records-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="api.js"></script>
+  <script>
+    requireAuth(); let selectedEmp=null;
+    async function searchEmployee(){
+      const q=document.getElementById('search').value.trim().toLowerCase();
+      if(!q){showAlert('⚠️ أدخل اسم أو رقم','error');return;}
+      const btn=document.getElementById('search-btn');loading(btn,true);
+      try{
+        const res=await apiPost({action:'getEmployees'});
+        const emp=(res.data||[]).find(e=>e.name.toLowerCase().includes(q)||String(e.id)===q);
+        if(!emp){showAlert('❌ لم يتم العثور على الموظف','error');loading(btn,false);return;}
+        selectedEmp=emp;
+        document.getElementById('emp-avatar').textContent=emp.name.charAt(0);
+        document.getElementById('emp-name').textContent=emp.name;
+        document.getElementById('emp-detail').textContent=`رقم: #${emp.id} | سعر الساعة: ${emp.hourly_rate} `;
+        document.getElementById('emp-section').classList.remove('hidden');
+        document.getElementById('result-section').classList.add('hidden');
+      }catch(e){showAlert('❌ تعذر الاتصال','error');}
+      loading(btn,false);
+    }
+    function calcHours(){
+      const from=document.getElementById('date-from').value,to=document.getElementById('date-to').value;
+      if(!from||!to){showAlert('⚠️ حدد الفترة','error');return;}
+      const recs=Attendance.forEmployee(selectedEmp.id).filter(r=>r.date>=from&&r.date<=to&&r.checkin&&r.checkout);
+      let totalMins=0,html='';
+      recs.sort((a,b)=>a.date>b.date?1:-1).forEach(r=>{
+        const cin=r.checkin.split(':').map(Number),cout=r.checkout.split(':').map(Number);
+        let m=(cout[0]*60+cout[1])-(cin[0]*60+cin[1]);if(m<0)m+=1440;totalMins+=m;
+        const h=Math.floor(m/60),mn=m%60;
+        html+=`<div class="rec-item"><div><div class="rec-date">📅 ${r.date}</div><div style="font-size:.8rem;color:var(--text-muted)">دخول: ${r.checkin} — خروج: ${r.checkout}</div></div><div class="rec-hours">${h}:${String(mn).padStart(2,'0')} ساعة</div></div>`;
+      });
+      document.getElementById('total-hours').textContent=(totalMins/60).toFixed(2);
+      document.getElementById('records-list').innerHTML=recs.length?`<hr class="divider"/><p style="color:var(--text-muted);font-size:.85rem;margin-bottom:10px">تفاصيل (${recs.length} يوم):</p>`+html:'<div class="alert alert-info" style="margin-top:16px">⚠️ لا توجد سجلات كاملة</div>';
+      document.getElementById('result-section').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

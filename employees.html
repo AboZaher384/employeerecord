@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>قائمة الموظفين</title><link rel="stylesheet" href="style.css"/>
+  <style>
+    .count-banner{background:linear-gradient(135deg,var(--primary),var(--primary-light));border:1px solid var(--accent);border-radius:var(--radius);padding:24px;text-align:center;margin-bottom:24px}
+    .count-banner .num{font-size:3.5rem;font-weight:900;color:var(--accent-light);line-height:1}
+    .count-banner .lbl{color:var(--text-muted);font-size:.95rem;margin-top:4px}
+    .emp-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:14px;transition:border-color .2s,transform .2s;display:flex;align-items:center;gap:16px}
+    .emp-card:hover{border-color:var(--accent);transform:translateX(-3px)}
+    .emp-card .avatar{width:52px;height:52px;background:linear-gradient(135deg,var(--primary),var(--primary-light));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;color:var(--accent-light);flex-shrink:0;border:2px solid var(--accent)}
+    .emp-card .info{flex:1}.emp-card .info h3{font-size:1.05rem;font-weight:700;margin-bottom:4px}
+    .emp-card .info .meta{color:var(--text-muted);font-size:.82rem;display:flex;gap:12px;flex-wrap:wrap}
+    .badge{background:var(--primary);color:var(--accent-light);padding:3px 10px;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap}
+    .rate{color:var(--success);font-weight:700;font-size:.95rem;white-space:nowrap}
+    .search-bar{position:relative;margin-bottom:20px}
+    .search-bar input{width:100%;padding:12px 16px 12px 44px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Cairo',sans-serif;font-size:1rem;direction:rtl}
+    .search-bar input:focus{outline:none;border-color:var(--accent)}
+    .search-bar .sicon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
+    .loading-state{text-align:center;padding:40px;color:var(--text-muted)}
+    .empty-state{text-align:center;padding:60px 20px;color:var(--text-muted)}
+    .empty-state .icon{font-size:3rem;display:block;margin-bottom:12px}
+  </style>
+</head>
+<body>
+  <nav><a href="index.html" class="nav-brand"><div class="logo-icon">👥</div>سجل الموظفين</a><a href="index.html" class="nav-home">🏠 الرئيسية</a></nav>
+  <div class="container">
+    <div class="page-title fade-up"><span class="icon">👥</span><h1>قائمة الموظفين</h1><p>جميع الموظفين المسجلين</p></div>
+    <div class="count-banner fade-up"><div class="num" id="emp-count">...</div><div class="lbl">موظف مسجل</div></div>
+    <div class="search-bar fade-up">
+      <input type="text" id="filter" placeholder="ابحث بالاسم أو رقم الجوال..." oninput="filterList()"/>
+      <span class="sicon">🔍</span>
+    </div>
+    <div id="emp-list" class="fade-up"><div class="loading-state">⏳ جارٍ تحميل البيانات...</div></div>
+  </div>
+  <script src="api.js"></script>
+  <script>
+    let allEmployees = [];
+    (async () => {
+      await requireAuth();
+      try {
+        const res = await apiPost({ action: 'getEmployees' });
+        allEmployees = res.data || [];
+        document.getElementById('emp-count').textContent = allEmployees.length;
+        renderList(allEmployees);
+      } catch(e) {
+        document.getElementById('emp-list').innerHTML = '<div class="alert alert-error">❌ تعذر تحميل البيانات</div>';
+      }
+    })();
+
+    function filterList() {
+      const q = document.getElementById('filter').value.trim().toLowerCase();
+      renderList(q ? allEmployees.filter(e =>
+        e.name.toLowerCase().includes(q) || String(e.phone).includes(q) || String(e.id).includes(q)
+      ) : allEmployees);
+    }
+
+    function formatDate(d) {
+      if (!d) return '—';
+      // إذا كان فيه وقت (T) خد التاريخ فقط
+      return String(d).split('T')[0];
+    }
+
+    function renderList(list) {
+      const el = document.getElementById('emp-list');
+      if (!allEmployees.length) {
+        el.innerHTML = `<div class="empty-state"><span class="icon">📋</span><p>لا يوجد موظفون مسجلون بعد</p><a href="add-employee.html" class="btn btn-primary" style="margin-top:16px">➕ إضافة موظف</a></div>`;
+        return;
+      }
+      if (!list.length) {
+        el.innerHTML = `<div class="empty-state"><span class="icon">🔍</span><p>لا نتائج مطابقة</p></div>`;
+        return;
+      }
+      el.innerHTML = list.map(emp => `
+        <div class="emp-card">
+          <div class="avatar">${emp.name.charAt(0)}</div>
+          <div class="info">
+            <h3>${emp.name}</h3>
+            <div class="meta">
+              <span>📱 ${emp.phone}</span>
+              <span>📅 ${formatDate(emp.hire_date)}</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+            <div class="badge">#${emp.id}</div>
+            <div class="rate">${emp.hourly_rate} </div>
+          </div>
+        </div>`).join('');
+    }
+  </script>
+</body>
+</html>

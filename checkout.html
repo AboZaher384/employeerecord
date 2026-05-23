@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>تسجيل الخروج</title>
+  <link rel="stylesheet" href="style.css"/>
+  <style>
+    .time-display{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;font-size:1.4rem;font-weight:700;color:var(--danger);text-align:center;letter-spacing:1px;margin-bottom:4px}
+    .session-info{background:var(--bg-card2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;font-size:.9rem;color:var(--text-muted)}
+    .session-info span{color:var(--accent-light);font-weight:700}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="index.html" class="nav-brand"><div class="logo-icon">👥</div>سجل الموظفين</a>
+    <a href="index.html" class="nav-home">🏠 الرئيسية</a>
+  </nav>
+  <div class="container">
+    <div class="page-title fade-up">
+      <span class="icon">🔴</span>
+      <h1>تسجيل وقت الخروج</h1>
+      <p>ابحث عن الموظف ثم سجل وقت الخروج</p>
+    </div>
+    <div class="card fade-up" style="animation-delay:.1s">
+      <div id="alert-box"></div>
+      <div class="form-group">
+        <label>🔍 اسم الموظف أو رقمه</label>
+        <input type="text" id="search" placeholder="أدخل الاسم أو الرقم..."/>
+      </div>
+      <button class="btn btn-secondary btn-full" id="search-btn" onclick="searchEmployee()" style="margin-bottom:20px">🔍 بحث</button>
+
+      <div id="emp-section" class="hidden">
+        <div class="emp-result">
+          <div class="emp-avatar" id="emp-avatar"></div>
+          <div class="emp-info"><h3 id="emp-name"></h3><p id="emp-detail"></p></div>
+        </div>
+
+        <div id="session-info" class="session-info hidden"></div>
+
+        <div class="grid-2">
+          <div class="form-group"><label>📅 تاريخ الخروج</label><input type="date" id="checkout-date"/></div>
+          <div class="form-group">
+            <label>🕐 وقت الخروج</label>
+            <div class="time-display" id="time-show">--:--</div>
+            <input type="time" id="checkout-time"/>
+          </div>
+        </div>
+        <button class="btn btn-danger btn-full" id="save-btn" onclick="saveCheckout()">✅ تسجيل الخروج</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    requireAuth();
+    let selectedEmp = null, openRecordIdx = -1;
+
+    async function searchEmployee() {
+      const q = document.getElementById('search').value.trim().toLowerCase();
+      if (!q) { showAlert('⚠️ أدخل اسم أو رقم', 'error'); return; }
+      const btn = document.getElementById('search-btn'); loading(btn, true);
+      try {
+        const res = await apiPost({ action: 'getEmployees' });
+        const emp = (res.data || []).find(e => e.name.toLowerCase().includes(q) || String(e.id) === q);
+        if (!emp) { showAlert('❌ لم يتم العثور على الموظف', 'error'); loading(btn, false); return; }
+        selectedEmp = emp;
+
+        // ابحث عن آخر سجل دخول بدون خروج (بأي تاريخ، مو بس اليوم)
+        const all = Attendance.getAll();
+        openRecordIdx = -1;
+        // نبحث من الأحدث للأقدم
+        for (let i = all.length - 1; i >= 0; i--) {
+          if (String(all[i].emp_id) === String(emp.id) && all[i].checkin && !all[i].checkout) {
+            openRecordIdx = i;
+            break;
+          }
+        }
+
+        document.getElementById('emp-avatar').textContent = emp.name.charAt(0);
+        document.getElementById('emp-name').textContent = emp.name;
+        document.getElementById('emp-detail').textContent = `رقم: #${emp.id} | جوال: ${emp.phone}`;
+
+        const si = document.getElementById('session-info');
+        if (openRecordIdx !== -1) {
+          const rec = all[openRecordIdx];
+          si.innerHTML = `دخول مسجل: <span>${rec.date} — ${rec.checkin}</span>`;
+          si.classList.remove('hidden');
+          // اجعل تاريخ الخروج هو نفس تاريخ الدخول تلقائياً
+          document.getElementById('checkout-date').value = rec.date;
+        } else {
+          si.innerHTML = `⚠️ لا يوجد دخول مسجل بدون خروج`;
+          si.classList.remove('hidden');
+          document.getElementById('checkout-date').value = new Date().toISOString().split('T')[0];
+        }
+
+        const time = new Date().toTimeString().slice(0, 5);
+        document.getElementById('checkout-time').value = time;
+        document.getElementById('time-show').textContent = time;
+        document.getElementById('checkout-time').oninput = function () {
+          document.getElementById('time-show').textContent = this.value || '--:--';
+        };
+        document.getElementById('emp-section').classList.remove('hidden');
+      } catch(e) { showAlert('❌ تعذر الاتصال', 'error'); }
+      loading(btn, false);
+    }
+
+    function saveCheckout() {
+      const date = document.getElementById('checkout-date').value;
+      const time = document.getElementById('checkout-time').value;
+      if (!date || !time) { showAlert('⚠️ أدخل التاريخ والوقت', 'error'); return; }
+
+      if (openRecordIdx !== -1) {
+        // ✅ تحديث نفس السطر — يضيف الخروج على سجل الدخول الموجود
+        const all = Attendance.getAll();
+        all[openRecordIdx].checkout = time;
+        all[openRecordIdx].checkout_date = date;
+        Attendance.update(openRecordIdx, all[openRecordIdx]);
+        showAlert(`✅ تم تسجيل خروج "${selectedEmp.name}" الساعة ${time}`, 'success');
+      } else {
+        // لا يوجد دخول مسجل — أضف سطر جديد بالخروج فقط
+        Attendance.add({ emp_id: selectedEmp.id, emp_name: selectedEmp.name, date, checkin: '', checkout: time });
+        showAlert(`✅ تم تسجيل خروج "${selectedEmp.name}" (بدون دخول مسجل)`, 'success');
+      }
+
+      document.getElementById('emp-section').classList.add('hidden');
+      document.getElementById('search').value = '';
+      selectedEmp = null; openRecordIdx = -1;
+    }
+  </script>
+</body>
+</html>

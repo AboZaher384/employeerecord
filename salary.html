@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>حساب الراتب</title><link rel="stylesheet" href="style.css"/>
+  <style>
+    .salary-card{background:var(--bg-card2);border:1px solid var(--accent);border-radius:var(--radius);padding:24px;margin-top:20px}
+    .salary-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)}.salary-row:last-child{border-bottom:none}
+    .salary-row .row-label{color:var(--text-muted);font-size:.9rem}.salary-row .row-val{font-weight:700}
+    .salary-total{background:linear-gradient(135deg,var(--accent),var(--accent-light));border-radius:var(--radius-sm);padding:20px;text-align:center;margin-top:16px}
+    .salary-total .amount{font-size:2.4rem;font-weight:900;color:#1a1a1a;line-height:1}.salary-total .label{color:#333;font-size:.9rem;margin-top:4px}
+    .deduct-section{background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.2);border-radius:var(--radius-sm);padding:16px;margin-top:12px}
+    .deduct-section .d-title{color:#e74c3c;font-weight:700;margin-bottom:8px}
+    .deduct-item{display:flex;justify-content:space-between;padding:6px 0;font-size:.9rem}
+    .deduct-item .d-label{color:var(--text-muted)}.deduct-item .d-val{color:#e74c3c;font-weight:700}
+  </style>
+</head>
+<body>
+  <nav><a href="index.html" class="nav-brand"><div class="logo-icon">👥</div>سجل الموظفين</a><a href="index.html" class="nav-home">🏠 الرئيسية</a></nav>
+  <div class="container">
+    <div class="page-title fade-up"><span class="icon">💵</span><h1>حساب الراتب</h1><p>احسب راتب الموظف بعد خصم السلف</p></div>
+    <div class="card fade-up" style="animation-delay:.1s">
+      <div id="alert-box"></div>
+      <div class="form-group"><label>🔍 اسم الموظف أو رقمه</label><input type="text" id="search" placeholder="أدخل الاسم أو الرقم..."/></div>
+      <button class="btn btn-secondary btn-full" id="search-btn" onclick="searchEmployee()" style="margin-bottom:20px">🔍 بحث</button>
+      <div id="emp-section" class="hidden">
+        <div class="emp-result" style="margin-bottom:20px"><div class="emp-avatar" id="emp-avatar"></div><div class="emp-info"><h3 id="emp-name"></h3><p id="emp-detail"></p></div></div>
+        <div class="grid-2">
+          <div class="form-group"><label>📅 من تاريخ</label><input type="date" id="date-from"/></div>
+          <div class="form-group"><label>📅 إلى تاريخ</label><input type="date" id="date-to"/></div>
+        </div>
+        <button class="btn btn-primary btn-full" id="calc-btn" onclick="calcSalary()">🔢 احسب الراتب</button>
+        <div id="salary-result" class="hidden">
+          <div class="salary-card">
+            <div class="salary-row"><span class="row-label">⏱️ إجمالي ساعات العمل</span><span class="row-val" id="res-hours"></span></div>
+            <div class="salary-row"><span class="row-label">💰 سعر الساعة</span><span class="row-val" id="res-rate"></span></div>
+            <div class="salary-row"><span class="row-label">🧮 الراتب الإجمالي</span><span class="row-val" id="res-gross" style="color:var(--success)"></span></div>
+          </div>
+          <div id="advances-section" class="hidden">
+            <div class="deduct-section">
+              <div class="d-title">📉 السلف المخصومة</div>
+              <div id="advances-list"></div>
+              <div class="deduct-item" style="border-top:1px solid rgba(231,76,60,.2);margin-top:8px;padding-top:10px"><span class="d-label" style="font-weight:700">إجمالي السلف</span><span class="d-val" id="res-advances"></span></div>
+            </div>
+          </div>
+          <div class="salary-total"><div class="amount" id="res-net">0</div><div class="label">صافي الراتب المستحق (ريال سعودي)</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="api.js"></script>
+  <script>
+    requireAuth(); let selectedEmp=null;
+    async function searchEmployee(){
+      const q=document.getElementById('search').value.trim().toLowerCase();
+      if(!q){showAlert('⚠️ أدخل اسم أو رقم','error');return;}
+      const btn=document.getElementById('search-btn');loading(btn,true);
+      try{
+        const res=await apiPost({action:'getEmployees'});
+        const emp=(res.data||[]).find(e=>e.name.toLowerCase().includes(q)||String(e.id)===q);
+        if(!emp){showAlert('❌ لم يتم العثور على الموظف','error');loading(btn,false);return;}
+        selectedEmp=emp;
+        document.getElementById('emp-avatar').textContent=emp.name.charAt(0);
+        document.getElementById('emp-name').textContent=emp.name;
+        document.getElementById('emp-detail').textContent=`رقم: #${emp.id} | سعر الساعة: ${emp.hourly_rate} `;
+        document.getElementById('emp-section').classList.remove('hidden');
+        document.getElementById('salary-result').classList.add('hidden');
+      }catch(e){showAlert('❌ تعذر الاتصال','error');}
+      loading(btn,false);
+    }
+    function calcSalary(){
+      const from=document.getElementById('date-from').value,to=document.getElementById('date-to').value;
+      if(!from||!to){showAlert('⚠️ حدد الفترة','error');return;}
+      const recs=Attendance.forEmployee(selectedEmp.id).filter(r=>r.date>=from&&r.date<=to&&r.checkin&&r.checkout);
+      let totalMins=0;
+      recs.forEach(r=>{const cin=r.checkin.split(':').map(Number),cout=r.checkout.split(':').map(Number);let m=(cout[0]*60+cout[1])-(cin[0]*60+cin[1]);if(m<0)m+=1440;totalMins+=m;});
+      const totalHrs=totalMins/60,gross=totalHrs*Number(selectedEmp.hourly_rate);
+      const empAdv=Advances.forEmployee(selectedEmp.id).filter(a=>a.date>=from&&a.date<=to);
+      const totalAdv=empAdv.reduce((s,a)=>s+Number(a.amount),0);
+      const net=Math.max(0,gross-totalAdv);
+      document.getElementById('res-hours').textContent=`${totalHrs.toFixed(2)} ساعة`;
+      document.getElementById('res-rate').textContent=`${selectedEmp.hourly_rate}`;
+      document.getElementById('res-gross').textContent=`${gross.toFixed(2)} `;
+      document.getElementById('res-net').textContent=net.toFixed(2);
+      if(totalAdv>0){
+        document.getElementById('advances-list').innerHTML=empAdv.map(a=>`<div class="deduct-item"><span class="d-label">سلفة - ${a.date}</span><span class="d-val">${Number(a.amount).toFixed(2)} </span></div>`).join('');
+        document.getElementById('res-advances').textContent=`${totalAdv.toFixed(2)} `;
+        document.getElementById('advances-section').classList.remove('hidden');
+      }else{document.getElementById('advances-section').classList.add('hidden');}
+      document.getElementById('salary-result').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
